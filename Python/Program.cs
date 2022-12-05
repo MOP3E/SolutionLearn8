@@ -1,14 +1,14 @@
-﻿using SFML.Learning;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
-using SFML.Window;
+using System.Threading;
 
 namespace Python
 {
-    internal class Program : Game
+    internal class Program
     {
         /// <summary>
         /// Размер игрового поля в логических единицах.
@@ -51,11 +51,16 @@ namespace Python
         private static float _pythonDelta;
         
         /// <summary>
-        /// Направление движения головы питона
-        /// 0 - вверх, 1 - вправо, 2 - вниз, 3 - влево.
+        /// Текущее направление движения головы питона.
         /// </summary>
-        private static int _pythonHeadDirection = 1;
+        private static HeadDirection _pythonHeadDirection = HeadDirection.Right;
         
+        
+        /// <summary>
+        /// Следующее направление движения головы питона.
+        /// </summary>
+        private static HeadDirection _pythonNextHeadDirection = HeadDirection.Right;
+
         /// <summary>
         /// Очки игрока.
         /// </summary>
@@ -89,12 +94,12 @@ namespace Python
         /// <summary>
         /// Список красных квадратов на неигровом экране.
         /// </summary>
-        private static List<Vector2Int> _redSquares = new List<Vector2Int>();
+        private static Dictionary<ConsoleColor, List<Vector2Int>> _colorSquares = new Dictionary<ConsoleColor, List<Vector2Int>>();
             
         /// <summary>
-        /// Скорость движения красных квадратиков.
+        /// Период движения крастных квадратиков, мс.
         /// </summary>
-        private static float _borderSpeed = 100;
+        private static float _borderPeriod = 150;
     
         /// <summary>
         /// Время, прошедшее с момента последнего движения красных квадратиков.
@@ -116,11 +121,33 @@ namespace Python
         /// </summary>
         private static Dictionary<Vector2Int, ConsoleColor> _squaresToDraw = new Dictionary<Vector2Int, ConsoleColor>();
 
+        /// <summary>
+        /// Разрешить выполнение главного цикла игры.
+        /// </summary>
+        private static bool _game = true;
+
+        /// <summary>
+        /// Таймер для измерения времени игры.
+        /// </summary>
+        private static Stopwatch _timer = new Stopwatch();
+
+        /// <summary>
+        /// Время, зафиксированное в начале цикла, мс.
+        /// </summary>
+        private static long _startTime;
+
+        /// <summary>
+        /// Время, прошедшее с начала предыдущего цикла, мс.
+        /// </summary>
+        private static long _gameDelta;
+
+        /// <summary>
+        /// Фикисированный период игрового цикла, мс.
+        /// </summary>
+        private const int Period = 50;
 
         static void Main(string[] args)
         {
-            Game.InitWindow(800, 600);
-
             //установить заголовок окна консоли
             Console.Title = "Python";
             //установить для консоли требуемый шрифт
@@ -134,17 +161,62 @@ namespace Python
             //проинициализировать игрового бога
             _random = new Random((int)(DateTime.Now.Ticks & 0xFFFFFFFF));
 
+            //рассчитать положение квадратиков рамки неигрового экрана
+            _colorSquares.Add(ConsoleColor.Magenta, CalculateBorder(0));
+            _colorSquares.Add(ConsoleColor.Blue, CalculateBorder(2));
+            _colorSquares.Add(ConsoleColor.Cyan, CalculateBorder(4));
+            _colorSquares.Add(ConsoleColor.Green, CalculateBorder(6));
+            _colorSquares.Add(ConsoleColor.Yellow, CalculateBorder(8));
+            _colorSquares.Add(ConsoleColor.Red, CalculateBorder(10));
+
+            //задать режим стартового экрана и нарисовать стартовый экран
             _mode = Mode.StartScreen;
             StartScreenInit();
 
-            //главный цикл игры
-            while (true)
-            {
-                //Расчёт.
-                DispatchEvents();
+            //запустить игровой таймер
+            _timer.Start();
+            _startTime = _timer.ElapsedMilliseconds;
 
-                //выход из игры
-                if (GetKey(Keyboard.Key.Escape)) break;
+            //главный цикл игры
+            while (_game)
+            {
+                //рассчитать время, прошедшее с начала предыдущего игрового цикла и зафиксировать текущее время
+                _gameDelta = _timer.ElapsedMilliseconds - _startTime;
+                _startTime = _timer.ElapsedMilliseconds;
+
+                //обработка нажатий на кнопки
+                while (Console.KeyAvailable)
+                {
+                    switch (Console.ReadKey().Key)
+                    {
+                        case ConsoleKey.Escape:
+                            //нажатие на кнопку выхода из игры
+                            _game = false;
+                            break;
+                        case ConsoleKey.LeftArrow:
+                        case ConsoleKey.NumPad4:
+                            //команда движения питона влево
+                            if (_pythonNextHeadDirection != HeadDirection.Right) _pythonNextHeadDirection = HeadDirection.Left;
+                            break;
+                        case ConsoleKey.RightArrow:
+                        case ConsoleKey.NumPad6:
+                            //команда движения питона вправо
+                            if (_pythonNextHeadDirection != HeadDirection.Left) _pythonNextHeadDirection = HeadDirection.Right;
+                            break;
+                        case ConsoleKey.UpArrow:
+                        case ConsoleKey.NumPad8:
+                            //команда движения питона вверх
+                            if (_pythonNextHeadDirection != HeadDirection.Down) _pythonNextHeadDirection = HeadDirection.Up;
+                            break;
+                        case ConsoleKey.DownArrow:
+                        case ConsoleKey.NumPad2:
+                            //команда движения питона вниз
+                            if (_pythonNextHeadDirection != HeadDirection.Up) _pythonNextHeadDirection = HeadDirection.Down;
+                            break;
+                    }
+
+                }
+
 
                 //игровая логика
                 switch (_mode)
@@ -163,14 +235,11 @@ namespace Python
                         break;
                 }
 
-
-                ClearWindow(100, 149, 237);
-
                 //Перерисовка экрана
-                //стереть квадраты
-                foreach (KeyValuePair<Vector2Int, ConsoleColor> pair in _squaresToClear)
-                    WriteXY(pair.Key * ConsoleMultiplier, ClearSquare);
-                _squaresToClear.Clear();
+                ////стереть квадраты
+                //foreach (KeyValuePair<Vector2Int, ConsoleColor> pair in _squaresToClear)
+                //    WriteXY(pair.Key * ConsoleMultiplier, ClearSquare);
+                //_squaresToClear.Clear();
                 //нарисовать квадраты
                 foreach (KeyValuePair<Vector2Int, ConsoleColor> pair in _squaresToDraw)
                     WriteXY(pair.Key * ConsoleMultiplier, Square, pair.Value);
@@ -189,8 +258,9 @@ namespace Python
                         break;
                 }
 
-                //Ожидание
-                Delay(1);
+                //ожидание до конца периода
+                long timeRemains = Period - (_timer.ElapsedMilliseconds - _startTime) - 5;
+                if (timeRemains > 0 && timeRemains < int.MaxValue) Thread.Sleep((int)timeRemains);
             }
         }
 
@@ -203,46 +273,178 @@ namespace Python
             //PlayMusic("_nongameMusic");
             //нарисовать рамку окна
             _borderDelta = 0;
-            DrawBorder();
-
-            int i = _redSquares.Count;
+            foreach (KeyValuePair<ConsoleColor, List<Vector2Int>> pair in _colorSquares)
+            {
+                foreach (Vector2Int square in pair.Value)
+                {
+                    if (_squaresToDraw.ContainsKey(square))
+                        _squaresToDraw[square] = pair.Key;
+                    else
+                        _squaresToDraw.Add(square, pair.Key);
+                }
+            }
 
             //нарисовать заголовок окна и справочную информацию
-            //TODO
+            List<ConsoleColor> colors = new List<ConsoleColor>
+                { ConsoleColor.Red, ConsoleColor.Yellow, ConsoleColor.Green, ConsoleColor.Cyan, ConsoleColor.Blue, ConsoleColor.Magenta, ConsoleColor.White };
+            //P
+            int colorIndex = _random.Next(colors.Count);
+            ConsoleColor color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(5,16), "████████", color);
+            WriteXY(new Vector2Int(5,17), "██      ██", color);
+            WriteXY(new Vector2Int(5,18), "██      ██", color);
+            WriteXY(new Vector2Int(5,19), "████████", color);
+            WriteXY(new Vector2Int(5,20), "██", color);
+            WriteXY(new Vector2Int(5,21), "██", color);
+            WriteXY(new Vector2Int(5,22), "██", color);
+            //Y
+            colorIndex = _random.Next(colors.Count);
+            color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(17,16), "██      ██", color);
+            WriteXY(new Vector2Int(17,17), "██      ██", color);
+            WriteXY(new Vector2Int(17,18), "  ██  ██", color);
+            WriteXY(new Vector2Int(17,19), "    ██", color);
+            WriteXY(new Vector2Int(17,20), "    ██", color);
+            WriteXY(new Vector2Int(17,21), "    ██", color);
+            WriteXY(new Vector2Int(17,22), "    ██", color);
+            //T
+            colorIndex = _random.Next(colors.Count);
+            color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(29,16), "██████████", color);
+            WriteXY(new Vector2Int(29,17), "    ██", color);
+            WriteXY(new Vector2Int(29,18), "    ██", color);
+            WriteXY(new Vector2Int(29,19), "    ██", color);
+            WriteXY(new Vector2Int(29,20), "    ██", color);
+            WriteXY(new Vector2Int(29,21), "    ██", color);
+            WriteXY(new Vector2Int(29,22), "    ██", color);
+            //H
+            colorIndex = _random.Next(colors.Count);
+            color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(41,16), "██      ██", color);
+            WriteXY(new Vector2Int(41,17), "██      ██", color);
+            WriteXY(new Vector2Int(41,18), "██      ██", color);
+            WriteXY(new Vector2Int(41,19), "██████████", color);
+            WriteXY(new Vector2Int(41,20), "██      ██", color);
+            WriteXY(new Vector2Int(41,21), "██      ██", color);
+            WriteXY(new Vector2Int(41,22), "██      ██", color);
+            //O
+            colorIndex = _random.Next(colors.Count);
+            color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(53,16), "  ██████", color);
+            WriteXY(new Vector2Int(53,17), "██      ██", color);
+            WriteXY(new Vector2Int(53,18), "██      ██", color);
+            WriteXY(new Vector2Int(53,19), "██      ██", color);
+            WriteXY(new Vector2Int(53,20), "██      ██", color);
+            WriteXY(new Vector2Int(53,21), "██      ██", color);
+            WriteXY(new Vector2Int(53,22), "  ██████", color);
+            //N
+            colorIndex = _random.Next(colors.Count);
+            color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(65,16), "██      ██", color);
+            WriteXY(new Vector2Int(65,17), "██      ██", color);
+            WriteXY(new Vector2Int(65,18), "████    ██", color);
+            WriteXY(new Vector2Int(65,19), "██  ██  ██", color);
+            WriteXY(new Vector2Int(65,20), "██    ████", color);
+            WriteXY(new Vector2Int(65,21), "██      ██", color);
+            WriteXY(new Vector2Int(65,22), "██      ██", color);
+        }
+
+        private static void GamoverScreenInit()
+        {
+            //запустить музыку
+            //PlayMusic("_nongameMusic");
+            //нарисовать рамку окна
+            _borderDelta = 0;
+            foreach (KeyValuePair<ConsoleColor, List<Vector2Int>> pair in _colorSquares)
+            {
+                foreach (Vector2Int square in pair.Value)
+                {
+                    if (_squaresToDraw.ContainsKey(square))
+                        _squaresToDraw[square] = pair.Key;
+                    else
+                        _squaresToDraw.Add(square, pair.Key);
+                }
+            }
+            
+            //нарисовать заголовок окна и справочную информацию
+            List<ConsoleColor> colors = new List<ConsoleColor>
+                { ConsoleColor.Red, ConsoleColor.Yellow, ConsoleColor.Green, ConsoleColor.Cyan, ConsoleColor.Blue, ConsoleColor.Magenta, ConsoleColor.White };
+            //в слове "GAME OVER" 8 букв, ярких цветов только 7, поэтому добавляю ещё один цвет случайным образом
+            int colorIndex = _random.Next(colors.Count);
+            colors.Add(colors[colorIndex]);
+
+            //G
+            colorIndex = _random.Next(colors.Count);
+            ConsoleColor color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(17,16), "  ████████", color);
+            WriteXY(new Vector2Int(17,17), "██", color);
+            WriteXY(new Vector2Int(17,18), "██", color);
+            WriteXY(new Vector2Int(17,19), "██", color);
+            WriteXY(new Vector2Int(17,20), "██    ████", color);
+            WriteXY(new Vector2Int(17,21), "██      ██", color);
+            WriteXY(new Vector2Int(17,22), "  ████████", color);
+            //A
+            colorIndex = _random.Next(colors.Count);
+            color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(29,16), "    ██", color);
+            WriteXY(new Vector2Int(29,17), "  ██  ██", color);
+            WriteXY(new Vector2Int(29,18), "██      ██", color);
+            WriteXY(new Vector2Int(29,19), "██      ██", color);
+            WriteXY(new Vector2Int(29,20), "██████████", color);
+            WriteXY(new Vector2Int(29,21), "██      ██", color);
+            WriteXY(new Vector2Int(29,22), "██      ██", color);
+            //M
+            colorIndex = _random.Next(colors.Count);
+            color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(41,16), "██      ██", color);
+            WriteXY(new Vector2Int(41,17), "██      ██", color);
+            WriteXY(new Vector2Int(41,18), "██      ██", color);
+            WriteXY(new Vector2Int(41,19), "██████████", color);
+            WriteXY(new Vector2Int(41,20), "██      ██", color);
+            WriteXY(new Vector2Int(41,21), "██      ██", color);
+            WriteXY(new Vector2Int(41,22), "██      ██", color);
+            //E
+            colorIndex = _random.Next(colors.Count);
+            color = colors[colorIndex];
+            colors.RemoveAt(colorIndex);
+            WriteXY(new Vector2Int(53,16), "  ██████", color);
+            WriteXY(new Vector2Int(53,17), "██      ██", color);
+            WriteXY(new Vector2Int(53,18), "██      ██", color);
+            WriteXY(new Vector2Int(53,19), "██      ██", color);
+            WriteXY(new Vector2Int(53,20), "██      ██", color);
+            WriteXY(new Vector2Int(53,21), "██      ██", color);
+            WriteXY(new Vector2Int(53,22), "  ██████", color);
         }
 
         /// <summary>
-        /// Первоначальная отрисовка рамки неигрового экрана.
+        /// Расчёт координат квадратиков рамки неигрового экрана.
         /// </summary>
-        private static void DrawBorder()
+        private static List<Vector2Int> CalculateBorder(int start)
         {
             //очистить экран
             Console.Clear();
 
             //нарисовать рамку
-            _redSquares.Clear();
+            List<Vector2Int> squares = new List<Vector2Int>();
             int c = 0;
             const int step = 12;
             //верхняя линия
-            for (int i = 0; i < GameFieldSize.X; i++)
+            for (int i = start; i < GameFieldSize.X; i++)
             {
                 Vector2Int coord = new Vector2Int(i, 0);
                 if (c % step == 0)
                 {
-                    //каждый 12 квадратик - красного цвета
-                    if (_squaresToDraw.ContainsKey(coord))
-                        _squaresToDraw[coord] = ConsoleColor.Red;
-                    else
-                        _squaresToDraw.Add(coord, ConsoleColor.Red);
-                    //сохранить координаты красного квадратика
-                    _redSquares.Add(coord);
-                }
-                else
-                {
-                    if (_squaresToDraw.ContainsKey(coord))
-                        _squaresToDraw[coord] = ConsoleColor.White;
-                    else
-                        _squaresToDraw.Add(coord, ConsoleColor.White);
+                    //сохранить координаты цветного квадратика
+                    squares.Add(coord);
                 }
                 c++;
             }
@@ -252,19 +454,8 @@ namespace Python
                 Vector2Int coord = new Vector2Int(GameFieldSize.X - 1, i);
                 if (c % step == 0)
                 {
-                    //каждый 12 квадратик - красного цвета
-                    if (_squaresToDraw.ContainsKey(coord))
-                        _squaresToDraw[coord] = ConsoleColor.Red;
-                    else
-                        _squaresToDraw.Add(coord, ConsoleColor.Red);
-                    _redSquares.Add(coord);
-                }
-                else
-                {
-                    if (_squaresToDraw.ContainsKey(coord))
-                        _squaresToDraw[coord] = ConsoleColor.White;
-                    else
-                        _squaresToDraw.Add(coord, ConsoleColor.White);
+                    //сохранить координаты цветного квадратика
+                    squares.Add(coord);
                 }
                 c++;
             }
@@ -274,20 +465,8 @@ namespace Python
                 Vector2Int coord = new Vector2Int(i, GameFieldSize.Y - 1);
                 if (c % step == 0)
                 {
-                    //каждый 12 квадратик - красного цвета
-                    if (_squaresToDraw.ContainsKey(coord))
-                        _squaresToDraw[coord] = ConsoleColor.Red;
-                    else
-                        _squaresToDraw.Add(coord, ConsoleColor.Red);
-                    //сохранить координаты красного квадратика
-                    _redSquares.Add(coord);
-                }
-                else
-                {
-                    if (_squaresToDraw.ContainsKey(coord))
-                        _squaresToDraw[coord] = ConsoleColor.White;
-                    else
-                        _squaresToDraw.Add(coord, ConsoleColor.White);
+                    //сохранить координаты цветного квадратика
+                    squares.Add(coord);
                 }
                 c++;
             }
@@ -297,24 +476,13 @@ namespace Python
                 Vector2Int coord = new Vector2Int(0, i);
                 if (c % step == 0)
                 {
-                    //каждый 12 квадратик - красного цвета
-                    if (_squaresToDraw.ContainsKey(coord))
-                        _squaresToDraw[coord] = ConsoleColor.Red;
-                    else
-                        _squaresToDraw.Add(coord, ConsoleColor.Red);
-                    //сохранить координаты красного квадратика
-                    _redSquares.Add(coord);
-                }
-                else
-                {
-                    if (_squaresToDraw.ContainsKey(coord))
-                        _squaresToDraw[coord] = ConsoleColor.White;
-                    else
-                        _squaresToDraw.Add(coord, ConsoleColor.White);
+                    //сохранить координаты цветного квадратика
+                    squares.Add(coord);
                 }
                 c++;
             }
-            int qqq = _redSquares.Count;
+
+            return squares;
         }
 
         /// <summary>
@@ -322,83 +490,91 @@ namespace Python
         /// </summary>
         private static void BorderIdle()
         {
-            //TODO: оценить потраченное время, и не пора ли двигать дальше квадратики
-            WriteXY(new Vector2Int(5,5), DeltaTime.ToString());
-            _borderDelta += 1000 * DeltaTime;
-            if(_borderDelta < _borderSpeed) return;
-            _borderDelta -= _borderSpeed;
+            //оценить потраченное время, и не пора ли двигать дальше квадратики
+            WriteXY(new Vector2Int(5,5), _gameDelta + "  ");
+            _borderDelta += _gameDelta;
+            if(_borderDelta < _borderPeriod) return;
+            _borderDelta -= _borderPeriod;
 
-            //покрасить текущие клетки белым
-            foreach (Vector2Int square in _redSquares)
+            //почистить текущие клетки
+            foreach (KeyValuePair<ConsoleColor, List<Vector2Int>> pair in _colorSquares)
             {
-                if (_squaresToDraw.ContainsKey(square))
-                    _squaresToDraw[square] = ConsoleColor.White;
-                else
-                    _squaresToDraw.Add(square, ConsoleColor.White);
+                foreach (Vector2Int square in pair.Value)
+                {
+                    if(!_squaresToClear.ContainsKey(square))
+                        _squaresToClear.Add(square, ConsoleColor.Black);
+                }
             }
             //переместиться на одну позицию дальше по рамке
-            for (int i = 0; i < _redSquares.Count; i++)
+            foreach (KeyValuePair<ConsoleColor, List<Vector2Int>> pair in _colorSquares)
             {
-                //красные клетки движутся по рамке по часовой стрелке
-                if (_redSquares[i].X == 0)
+                for (int i = 0; i < pair.Value.Count; i++)
                 {
-                    //движение по вертикали, снизу вверх
-                    Vector2Int newCoord = new Vector2Int(_redSquares[i].X, _redSquares[i].Y - 1);
-                    if (newCoord.Y < 0)
+                    //красные клетки движутся по рамке по часовой стрелке
+                    if (pair.Value[i].X == 0)
                     {
-                        newCoord.Y = 0;
-                        newCoord.X++;
+                        //движение по вертикали, снизу вверх
+                        Vector2Int newCoord = new Vector2Int(pair.Value[i].X, pair.Value[i].Y - 1);
+                        if (newCoord.Y < 0)
+                        {
+                            newCoord.Y = 0;
+                            newCoord.X++;
+                        }
+
+                        pair.Value[i] = newCoord;
+                        if (_squaresToDraw.ContainsKey(newCoord))
+                            _squaresToDraw[newCoord] = pair.Key;
+                        else
+                            _squaresToDraw.Add(newCoord, pair.Key);
                     }
-                    _redSquares[i] = newCoord;
-                    if (_squaresToDraw.ContainsKey(newCoord))
-                        _squaresToDraw[newCoord] = ConsoleColor.Red;
-                    else
-                        _squaresToDraw.Add(newCoord, ConsoleColor.Red);
-                }
-                else if(_redSquares[i].X == GameFieldSize.X - 1)
-                {
-                    //движение по вертикали, сверху вниз
-                    Vector2Int newCoord = new Vector2Int(_redSquares[i].X, _redSquares[i].Y + 1);
-                    if (newCoord.Y > GameFieldSize.Y - 1)
+                    else if (pair.Value[i].X == GameFieldSize.X - 1)
                     {
-                        newCoord.Y = GameFieldSize.Y - 1;
-                        newCoord.X--;
+                        //движение по вертикали, сверху вниз
+                        Vector2Int newCoord = new Vector2Int(pair.Value[i].X, pair.Value[i].Y + 1);
+                        if (newCoord.Y > GameFieldSize.Y - 1)
+                        {
+                            newCoord.Y = GameFieldSize.Y - 1;
+                            newCoord.X--;
+                        }
+
+                        pair.Value[i] = newCoord;
+                        if (_squaresToDraw.ContainsKey(newCoord))
+                            _squaresToDraw[newCoord] = pair.Key;
+                        else
+                            _squaresToDraw.Add(newCoord, pair.Key);
                     }
-                    _redSquares[i] = newCoord;
-                    if (_squaresToDraw.ContainsKey(newCoord))
-                        _squaresToDraw[newCoord] = ConsoleColor.Red;
-                    else
-                        _squaresToDraw.Add(newCoord, ConsoleColor.Red);
-                }
-                else if (_redSquares[i].Y == 0)
-                {
-                    //движение по горизонтали, слева направо
-                    Vector2Int newCoord = new Vector2Int(_redSquares[i].X + 1, _redSquares[i].Y);
-                    if (newCoord.X > GameFieldSize.X - 1)
+                    else if (pair.Value[i].Y == 0)
                     {
-                        newCoord.X = GameFieldSize.X - 1;
-                        newCoord.Y++;
+                        //движение по горизонтали, слева направо
+                        Vector2Int newCoord = new Vector2Int(pair.Value[i].X + 1, pair.Value[i].Y);
+                        if (newCoord.X > GameFieldSize.X - 1)
+                        {
+                            newCoord.X = GameFieldSize.X - 1;
+                            newCoord.Y++;
+                        }
+
+                        pair.Value[i] = newCoord;
+                        if (_squaresToDraw.ContainsKey(newCoord))
+                            _squaresToDraw[newCoord] = pair.Key;
+                        else
+                            _squaresToDraw.Add(newCoord, pair.Key);
                     }
-                    _redSquares[i] = newCoord;
-                    if (_squaresToDraw.ContainsKey(newCoord))
-                        _squaresToDraw[newCoord] = ConsoleColor.Red;
-                    else
-                        _squaresToDraw.Add(newCoord, ConsoleColor.Red);
-                }
-                else if(_redSquares[i].Y == GameFieldSize.Y - 1)
-                {
-                    //движение по горизонтали, справа налево
-                    Vector2Int newCoord = new Vector2Int(_redSquares[i].X - 1, _redSquares[i].Y);
-                    if (newCoord.X < 0)
+                    else if (pair.Value[i].Y == GameFieldSize.Y - 1)
                     {
-                        newCoord.X = 0;
-                        newCoord.Y--;
+                        //движение по горизонтали, справа налево
+                        Vector2Int newCoord = new Vector2Int(pair.Value[i].X - 1, pair.Value[i].Y);
+                        if (newCoord.X < 0)
+                        {
+                            newCoord.X = 0;
+                            newCoord.Y--;
+                        }
+
+                        pair.Value[i] = newCoord;
+                        if (_squaresToDraw.ContainsKey(newCoord))
+                            _squaresToDraw[newCoord] = pair.Key;
+                        else
+                            _squaresToDraw.Add(newCoord, pair.Key);
                     }
-                    _redSquares[i] = newCoord;
-                    if (_squaresToDraw.ContainsKey(newCoord))
-                        _squaresToDraw[newCoord] = ConsoleColor.Red;
-                    else
-                        _squaresToDraw.Add(newCoord, ConsoleColor.Red);
                 }
             }
         }

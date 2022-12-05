@@ -35,21 +35,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="sfml-audio">
-      <HintPath>..\SFML.Net-2.4-learning\lib\sfml-audio.dll</HintPath>
-    </Reference>
-    <Reference Include="sfml-graphics">
-      <HintPath>..\SFML.Net-2.4-learning\lib\sfml-graphics.dll</HintPath>
-    </Reference>
-    <Reference Include="sfml-learning">
-      <HintPath>..\SFML.Net-2.4-learning\lib\sfml-learning.dll</HintPath>
-    </Reference>
-    <Reference Include="sfml-system">
-      <HintPath>..\SFML.Net-2.4-learning\lib\sfml-system.dll</HintPath>
-    </Reference>
-    <Reference Include="sfml-window">
-      <HintPath>..\SFML.Net-2.4-learning\lib\sfml-window.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -60,6 +45,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="HeadDirection.cs" />
     <Compile Include="Mode.cs" />
     <Compile Include="ConsoleFont.cs" />
     <Compile Include="Program.cs" />
@@ -68,26 +54,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="csfml-audio-2.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="csfml-graphics-2.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="csfml-system-2.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="csfml-window-2.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="openal32.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="OpenTK.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
