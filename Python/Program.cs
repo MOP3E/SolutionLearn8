@@ -75,16 +75,6 @@ namespace Python
         /// Рекорд игрока.
         /// </summary>
         private static int _playerRecord = 0;
-        
-        /// <summary>
-        /// Звук съедания еды питоном.
-        /// </summary>
-        private static string _eatSound;
-
-        /// <summary>
-        /// Звук столкновения питона с самим собой.
-        /// </summary>
-        private static string _crashSound;
 
         /// <summary>
         /// Координаты еды.
@@ -110,11 +100,6 @@ namespace Python
         /// Время, прошедшее с момента последнего движения красных квадратиков.
         /// </summary>
         private static long _borderDelta;
-
-        /// <summary>
-        /// Музыка в неигровых экранах.
-        /// </summary>
-        private static string _nongameMusic;
 
         /// <summary>
         /// Квадраты, которые нужно стереть в консоли.
@@ -286,9 +271,6 @@ namespace Python
         /// </summary>
         private static void StartScreenInit()
         {
-            //запустить музыку
-            //PlayMusic("_nongameMusic");
-            
             //очистить экран и списки отрисовки квадратов
             Console.Clear();
             _squaresToDraw.Clear();
@@ -406,9 +388,6 @@ namespace Python
 
         private static void GamoverScreenInit()
         {
-            //запустить музыку
-            //PlayMusic("_nongameMusic");
-            
             //очистить экран и списки отрисовки квадратов
             Console.Clear();
             _squaresToDraw.Clear();
@@ -694,8 +673,6 @@ namespace Python
         /// </summary>
         private static void GameStart()
         {
-            //остановить музыку
-            //StopMusic("_nongameMusic");
             //очистить экран и списки отрисовки квадратов
             Console.Clear();
             _squaresToDraw.Clear();
@@ -791,6 +768,7 @@ namespace Python
             //если питон достиг еды - увеличить счётчик очков, скорость питона и создать новую еду
             if (newCoord == _foodCoord)
             {
+                //увеличить очки игрока и длину питона
                 _playerScore++;
                 _pythonGrow += 2;
                 //период обновления игры порядка 50 мс, поэтому меньше 50 мс период питона делать нельзя
@@ -805,6 +783,8 @@ namespace Python
                 {
                     if (coord == newCoord)
                     {
+                        Thread.Sleep(1000);
+                        //переключиться в экран конца игры
                         _mode = Mode.GamoverScreen;
                         if (_playerScore > _playerRecord) _playerRecord = _playerScore;
                         GamoverScreenInit();
